@@ -1,0 +1,28 @@
+WITH CustomerMonthlyConsumption AS (
+    SELECT
+        c.customer_id,
+        c.first_name,
+        c.last_name,
+        STRFTIME('%Y-%m', r.reading_date) AS month_year, -- For grouping by month (SQLite syntax)
+        SUM(r.kwh_consumed) AS monthly_kwh
+    FROM
+        Customers AS c
+    INNER JOIN
+        Meters AS m ON c.customer_id = m.customer_id
+    INNER JOIN
+        Readings AS r ON m.meter_id = r.meter_id
+    GROUP BY
+        c.customer_id, c.first_name, c.last_name, month_year
+)
+SELECT
+    cmc.customer_id,
+    cmc.first_name,
+    cmc.last_name,
+    cmc.month_year,
+    cmc.monthly_kwh
+FROM
+    CustomerMonthlyConsumption AS cmc
+WHERE
+    cmc.monthly_kwh > 700 -- Example threshold for high consumption
+ORDER BY
+    cmc.monthly_kwh DESC;
