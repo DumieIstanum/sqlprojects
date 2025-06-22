@@ -1,0 +1,10 @@
+SELECT
+    meter_id,
+    reading_date,
+    kwh_consumed AS current_month_kwh,
+    LAG(kwh_consumed, 1, 0) OVER (PARTITION BY meter_id ORDER BY reading_date) AS previous_month_kwh,
+    (kwh_consumed - LAG(kwh_consumed, 1, 0) OVER (PARTITION BY meter_id ORDER BY reading_date)) AS kwh_difference
+FROM
+    Readings
+ORDER BY
+    meter_id, reading_date
