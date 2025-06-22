@@ -1,0 +1,23 @@
+SELECT
+    customer_id,
+    first_name,
+    last_name,
+    total_kwh_consumed,
+    ROW_NUMBER() OVER (ORDER BY total_kwh_consumed DESC) AS consumption_row_num,
+    RANK() OVER (ORDER BY total_kwh_consumed DESC) AS consumption_rank,
+    DENSE_RANK() OVER (ORDER BY total_kwh_consumed DESC) AS consumption_dense_rank
+FROM (
+    SELECT
+        c.customer_id,
+        c.first_name,
+        c.last_name,
+        SUM(r.kwh_consumed) AS total_kwh_consumed
+    FROM
+        Customers AS c
+    INNER JOIN
+        Meters AS m ON c.customer_id = m.customer_id
+    INNER JOIN
+        Readings AS r ON m.meter_id = r.meter_id
+    GROUP BY
+        c.customer_id, c.first_name, c.last_name
+) AS CustomerConsumption
