@@ -1,0 +1,16 @@
+SELECT
+    meter_id,
+    reading_date,
+    kwh_consumed,
+    reading_rank
+FROM (
+    SELECT
+        meter_id,
+        reading_date,
+        kwh_consumed,
+        NTILE(3) OVER (PARTITION BY meter_id ORDER BY reading_date DESC) AS reading_rank -- Dividing readings into 3 quartiles
+    FROM
+        Readings
+) AS RankedReadings
+WHERE
+    reading_rank = 1; -- Get the readings in the first quartile (most recent)
