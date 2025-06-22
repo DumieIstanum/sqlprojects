@@ -1,0 +1,25 @@
+SELECT
+    c.first_name,
+    c.last_name,
+    m.meter_id,
+    m.meter_type,
+    t.tariff_name,
+    t.rate_per_kwh,
+    (SELECT AVG(kwh_consumed) FROM Readings WHERE meter_id = m.meter_id AND reading_date >= DATEADD(day, -30, GETDATE())) AS avg_monthly_kwh,
+    CASE
+        WHEN m.meter_type = 'Residential' THEN (SELECT AVG(kwh_consumed) FROM Readings WHERE meter_id = m.meter_id AND reading_date >= DATEADD(day, -30, GETDATE())) * t.rate_per_kwh
+        WHEN m.meter_type = 'Commercial' THEN (SELECT AVG(kwh_consumed) FROM Readings WHERE meter_id = m.meter_id AND reading_date >= DATEADD(day, -30, GETDATE())) * t.rate_per_kwh * 0.95 -- 5% commercial discount
+        ELSE (SELECT AVG(kwh_consumed) FROM Readings WHERE meter_id = m.meter_id AND reading_date >= DATEADD(day, -30, GETDATE())) * t.rate_per_kwh
+    END AS estimated_monthly_bill
+FROM
+    Customers AS c
+INNER JOIN
+    Meters AS m ON c.customer_id = m.customer_id
+INNER JOIN
+    Tariffs AS t ON
+        (m.meter_type = 'Residential' AND t.tariff_name LIKE '%Residential%') OR
+        (m.meter_type = 'Commercial' AND t.tariff_name LIKE '%Commercial%') OR
+        (m.meter_type = 'Industrial' AND t.tariff_name LIKE '%Industrial%')
+WHERE
+    m.status = 'Active'
+    AND GETDATE() BETWEEN t.effective_date AND COALESCE(t.end_date, '9999-12-31');
