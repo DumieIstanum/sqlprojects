@@ -1,0 +1,9 @@
+SELECT
+    meter_id,
+    reading_date,
+    kwh_consumed,
+    AVG(kwh_consumed) OVER (PARTITION BY meter_id ORDER BY reading_date ROWS BETWEEN 2 PRECEDING AND CURRENT ROW) AS three_month_rolling_avg_kwh
+FROM
+    Readings
+ORDER BY
+    meter_id, reading_date
