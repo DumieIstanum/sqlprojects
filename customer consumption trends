@@ -1,0 +1,99 @@
+/*
+--------------------------------------------------------------------------------
+-- Project: SQL Portfolio - Advanced Customer Analysis
+--
+-- Objective: 
+-- Analyze each customer's monthly electricity consumption to identify the 
+-- percentage change from the previous month and calculate a running total 
+-- of their consumption over time.
+--
+-- Concepts Demonstrated:
+-- 1. Chained Common Table Expressions (CTEs) for modular query design.
+-- 2. LAG() window function to compare data across sequential rows.
+-- 3. PARTITION BY to apply window functions to specific data subsets (per customer).
+-- 4. SUM() as a window function to calculate a running total.
+-- 5. CASE statement for conditional logic and data categorization.
+-- 6. Date functions to group data by month.
+--
+-- Assumed Schema:
+-- - Customers(customer_id, first_name, last_name)
+-- - Meters(meter_id, customer_id)
+-- - Readings(reading_id, meter_id, kwh_consumed, reading_date)
+--------------------------------------------------------------------------------
+*/
+
+-- Step 1: Aggregate raw readings into total consumption for each customer per month.
+WITH MonthlyConsumption AS (
+    SELECT
+        c.customer_id,
+        c.first_name,
+        c.last_name,
+        -- Create a date representing the first day of the month for consistent grouping.
+        DATEFROMPARTS(YEAR(r.reading_date), MONTH(r.reading_date), 1) AS consumption_month,
+        SUM(r.kwh_consumed) AS total_monthly_kwh
+    FROM
+        Customers AS c
+    INNER JOIN
+        Meters AS m ON c.customer_id = m.customer_id
+    INNER JOIN
+        Readings AS r ON m.meter_id = r.meter_id
+    GROUP BY
+        c.customer_id,
+        c.first_name,
+        c.last_name,
+        YEAR(r.reading_date),
+        MONTH(r.reading_date)
+),
+
+-- Step 2: Use the LAG() window function to find the previous month's consumption.
+-- This allows us to perform month-over-month comparisons.
+ConsumptionComparison AS (
+    SELECT
+        customer_id,
+        first_name,
+        last_name,
+        consumption_month,
+        total_monthly_kwh,
+        -- Get the consumption value from the PREVIOUS row for the same customer.
+        -- If it's the first month on record for a customer, default the previous month's value to 0.
+        LAG(total_monthly_kwh, 1, 0) OVER (
+            PARTITION BY customer_id 
+            ORDER BY consumption_month
+        ) AS previous_month_kwh
+    FROM
+        MonthlyConsumption
+)
+
+-- Step 3: Calculate the final metrics and categorize the change.
+SELECT
+    cc.customer_id,
+    cc.first_name,
+    cc.last_name,
+    FORMAT(cc.consumption_month, 'yyyy-MM') AS month,
+    cc.total_monthly_kwh,
+    cc.previous_month_kwh,
+    
+    -- Calculate the percentage change. Avoid division-by-zero errors.
+    CASE
+        WHEN cc.previous_month_kwh = 0 THEN 100.0 -- Treat change from 0 as a 100% increase
+        ELSE ROUND(((cc.total_monthly_kwh - cc.previous_month_kwh) * 100.0) / cc.previous_month_kwh, 2)
+    END AS pct_change_from_previous,
+    
+    -- Categorize the month-over-month change for easy interpretation.
+    CASE
+        WHEN cc.total_monthly_kwh > cc.previous_month_kwh THEN 'Increased'
+        WHEN cc.total_monthly_kwh < cc.previous_month_kwh THEN 'Decreased'
+        ELSE 'Stable'
+    END AS consumption_trend,
+    
+    -- Calculate the running total consumption for each customer over time.
+    SUM(cc.total_monthly_kwh) OVER (
+        PARTITION BY cc.customer_id 
+        ORDER BY cc.consumption_month
+        ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW -- Explicit frame clause for clarity
+    ) AS running_total_kwh
+FROM
+    ConsumptionComparison cc
+ORDER BY
+    cc.customer_id,
+    cc.consumption_month;
